@@ -1,10 +1,3 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import numpy as np
-from io import StringIO
-import uuid
 """
 EU Research Funding Pitch Dashboard
 ------------------------------------
@@ -12,42 +5,53 @@ Upload the "DataKey.xlsx" export (EU Funding & Tenders Portal organisation
 dashboard) and get a set of pitch-ready visuals for slides.
 
 Run locally:   streamlit run eur_funding_dashboard.py
-Deploy:        push to GitHub, then deploy on streamlit.io Community Cloud.
+Deploy:        push to GitHub + requirements.txt, deploy on streamlit.io
 """
 
+import re
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import re
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="EU Research Funding Dashboard", layout="wide")
 
+# ---- Styling (fixes clipped/oversized text; borrows full-screen chart fix) ----
 st.markdown("""
-    <style>
-        .main > div {max-width: 1150px; margin: 0 auto;}
-        h1, h2, h3 {color: #1F3864;}
-        .stMetric {background:#f5f7fa; padding:10px; border-radius:10px;}
-    </style>
+<style>
+.main > div {max-width: 1150px; margin: 0 auto;}
+h1, h2, h3 {color: #1F3864;}
+.stat-card {background:#f5f7fa; border-radius:10px; padding:14px 10px; text-align:center; height:100%;}
+.stat-label {font-size:0.78rem; color:#555; margin-bottom:4px;}
+.stat-value {font-size:1.55rem; font-weight:700; color:#1F3864; line-height:1.25; word-wrap:break-word; white-space:normal;}
+.stat-sub {font-size:0.72rem; color:#888; margin-top:2px;}
+.stPlotlyChart, .js-plotly-plot, .plotly {width: 100% !important;}
+</style>
 """, unsafe_allow_html=True)
 
-st.title("EU Research Funding Dashboard")
-st.caption("Upload the DataKey.xlsx export from the EU Funding & Tenders Portal "
-           "organisation dashboard to generate slide-ready visuals.")
+
+def stat_card(col, label, value, sub=None):
+    col.markdown(f"""<div class="stat-card">
+        <div class="stat-label">{label}</div>
+        <div class="stat-value">{value}</div>
+        {f'<div class="stat-sub">{sub}</div>' if sub else ''}
+    </div>""", unsafe_allow_html=True)
+
+
+st.title("🎓 EU Research Funding — Pitch Dashboard")
+st.caption("Upload the DataKey.xlsx export to generate slide-ready visuals. "
+           "Sheets are detected by column headers, not by name, so a fresh export still works.")
 
 uploaded = st.file_uploader("Upload DataKey.xlsx", type=["xlsx"])
-
 if not uploaded:
-    st.info("Waiting for a file. Sheet order/naming can vary — this app "
-            "detects each table by its column headers, not by sheet name.")
+    st.info("Waiting for a file.")
     st.stop()
 
-# ---------- Load every sheet ----------
 raw = pd.read_excel(uploaded, sheet_name=None, engine="openpyxl")
 
 
 def find(cols_required):
-    """Return the first sheet whose columns are a superset of cols_required."""
     for df in raw.values():
         if all(any(c.lower() == col.lower() for col in df.columns) for c in cols_required):
             return df.copy()
@@ -61,7 +65,31 @@ def get_col(df, name):
     return None
 
 
-# ---------- Locate each known table ----------
+def eu_num(s):
+    """Parse EU-format numbers/percentages ('41.642.453,37', '0,78%', '-') -> float or None."""
+    if isinstance(s, (int, float)):
+        return float(s)
+    if not isinstance(s, str):
+        return None
+    t = s.strip().replace("%", "")
+    if t in ("", "-"):
+        return None
+    t = t.replace(".", "").replace(",", ".")
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def parse_label_value(cell):
+    """Clean the '_x000D_' / 'Label: value' artifacts in the Organisation Details sheet."""
+    if not isinstance(cell, str):
+        return cell
+    cell = cell.replace("_x000D_", "").strip()
+    return cell.split(":", 1)[1].strip() if ":" in cell else cell
+
+
+# ---------- Locate sheets ----------
 df_status = find(["Project Status", "Signed Grants"])
 df_pillar = find(["Pillar", "Net EU Contribution (EUR)"])
 df_contrib_total = find(["Net EU Contribution", "of total"])
@@ -78,106 +106,126 @@ df_erc = find(["ERC Principal Investigators"])
 df_dept = find(["Department Name", "Pro rata Department EU Contribution (EUR)"])
 df_msca = find(["MSCA Participation"])
 df_keywords = find(["Keywords", "Number of Keywords"])
+df_org = find(["Organization PIC", "VAT Number"])
+df_keyfig = find(["Indicator", "Organisation in HE"])
 
-# ---------- KPI row ----------
+# ================= HEADLINE KPIs =================
 st.header("Headline numbers")
-c1, c2, c3, c4, c5 = st.columns(5)
+row1 = st.columns(4)
 if df_contrib_total is not None:
-    c1.metric("Net EU Contribution", f"€{df_contrib_total.iloc[0,0]/1e6:.1f}M")
+    stat_card(row1[0], "Net EU Contribution", f"€{df_contrib_total.iloc[0,0]/1e6:.1f}M")
 if df_partic_total is not None:
-    c2.metric("Participations", f"{int(df_partic_total.iloc[0,0])}")
+    stat_card(row1[1], "Participations", f"{int(df_partic_total.iloc[0,0])}")
 if df_grants_total is not None:
-    c3.metric("Signed Grants", f"{int(df_grants_total.iloc[0,0])}")
+    stat_card(row1[2], "Signed Grants", f"{int(df_grants_total.iloc[0,0])}")
 if df_rank is not None:
-    c4.metric("National Rank", df_rank.iloc[0, 0])
-if df_erc is not None:
-    c5.metric("ERC Principal Investigators", int(df_erc.iloc[0, 0]))
+    stat_card(row1[3], "National Rank", df_rank.iloc[0, 0])
 
-# ---------- Leadership: Coordinator vs Participant ----------
-st.header("1. Leadership in projects")
+row2 = st.columns(3)
+if df_erc is not None:
+    stat_card(row2[0], "ERC Principal Investigators", int(df_erc.iloc[0, 0]))
+if df_msca is not None:
+    stat_card(row2[1], "MSCA Participation", int(df_msca.iloc[0, 0]))
+if df_eic is not None:
+    eic_val = int(df_eic.iloc[0, 0])
+    if eic_val > 0:
+        stat_card(row2[2], "EIC Participation", eic_val)
+    else:
+        row2[2].caption("No EIC-funded projects yet.")
+
+st.divider()
+st.header("A — Recreating the organisation dashboard")
+st.caption("Matches the panels in the reference PDF, using the current export.")
+
+# ---- Organisation details ----
+if df_org is not None:
+    st.subheader("Organisation details")
+    vals = {c: parse_label_value(df_org[c].iloc[0]) for c in df_org.columns}
+    cols = st.columns(4)
+    for i, (label, value) in enumerate(vals.items()):
+        stat_card(cols[i % 4], label, value if value else "—")
+
+# ---- Project status & Role ----
+c1, c2 = st.columns(2)
+if df_status is not None:
+    st_col, cnt_col = df_status.columns[0], df_status.columns[1]
+    fig = px.pie(df_status, names=st_col, values=cnt_col, hole=0.55, title="Project Status",
+                 color_discrete_sequence=["#C00000", "#2E75B6"])
+    fig.update_layout(margin=dict(t=40, b=10))
+    c1.plotly_chart(fig, use_container_width=True)
 if df_role is not None:
     role_col, part_col = df_role.columns[0], df_role.columns[1]
     total = df_role[part_col].sum()
-    coord = df_role.loc[df_role[role_col].str.upper() == "COORDINATOR", part_col].sum()
-    pct = coord / total * 100
-    colA, colB = st.columns([1, 2])
-    colA.metric("Share as Coordinator (not just participant)", f"{pct:.1f}%")
-    fig = px.pie(df_role, names=role_col, values=part_col, hole=0.55,
+    fig = px.pie(df_role, names=role_col, values=part_col, hole=0.55, title="Role in Projects",
                  color_discrete_sequence=["#1F3864", "#8FAADC"])
-    fig.update_layout(margin=dict(t=10, b=10))
-    colB.plotly_chart(fig, use_container_width=True)
+    fig.update_layout(margin=dict(t=40, b=10))
+    c2.plotly_chart(fig, use_container_width=True)
+    for _, r in df_role.iterrows():
+        c2.caption(f"{r[role_col]}: {r[part_col]/total*100:.1f}% ({int(r[part_col])} of {int(total)})")
 
-# ---------- Growth trajectory ----------
-st.header("2. Growth trajectory")
+# ---- Evolution timeline ----
 if df_years is not None:
+    st.subheader("Evolution of participation")
     year_col, part_col, cum_col = df_years.columns[0], df_years.columns[1], df_years.columns[2]
     fig = go.Figure()
-    fig.add_bar(x=df_years[year_col], y=df_years[part_col], name="New participations",
-                marker_color="#8FAADC")
+    fig.add_bar(x=df_years[year_col], y=df_years[part_col], name="New participations", marker_color="#8FAADC")
     fig.add_scatter(x=df_years[year_col], y=df_years[cum_col], name="Cumulative",
                      line=dict(color="#C00000", width=3), yaxis="y2")
-    fig.update_layout(
-        yaxis=dict(title="New participations per year"),
-        yaxis2=dict(title="Cumulative", overlaying="y", side="right"),
-        legend=dict(orientation="h", y=1.1), margin=dict(t=30)
-    )
+    fig.update_layout(yaxis=dict(title="New per year"), yaxis2=dict(title="Cumulative", overlaying="y", side="right"),
+                       legend=dict(orientation="h", y=1.15), margin=dict(t=30))
     st.plotly_chart(fig, use_container_width=True)
     recent = df_years[df_years[year_col] >= 2022][part_col].sum()
-    st.caption(f"**{recent}** of {int(df_years[cum_col].iloc[-1])} total participations "
-               f"(2022 onward) came in the last five years — momentum is accelerating.")
+    total_p = df_years[cum_col].iloc[-1]
+    st.caption(f"{int(recent)} of {int(total_p)} total participations came from 2022 onward.")
 
-# ---------- Framework programme comparison ----------
-st.header("3. Framework programme evolution")
+# ---- Framework programme ----
 if df_fp is not None:
+    st.subheader("Participation per Framework Programme")
     fp_col, part_col = df_fp.columns[0], df_fp.columns[1]
-    fig = px.bar(df_fp, x=fp_col, y=part_col, text=part_col,
-                 color=fp_col, color_discrete_sequence=px.colors.sequential.Blues_r[:3])
+    fig = px.bar(df_fp, x=fp_col, y=part_col, text=part_col, color=fp_col,
+                 color_discrete_sequence=px.colors.sequential.Blues_r[:3])
+    fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_layout(showlegend=False, margin=dict(t=10))
+    fig.update_yaxes(automargin=True)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------- Pillar funding + avg award size (efficiency insight) ----------
-st.header("4. Where the money comes from — and average award size")
-if df_pillar is not None and df_thematic is not None:
+# ---- Pillar funding (all categories) ----
+if df_pillar is not None:
+    st.subheader("Net EU contribution by pillar")
     pil_col, val_col = df_pillar.columns[0], df_pillar.columns[1]
-    top_pillar = df_pillar.nlargest(8, val_col)
-    col1, col2 = st.columns(2)
-    fig1 = px.bar(top_pillar, x=val_col, y=pil_col, orientation="h",
-                  color_discrete_sequence=["#1F3864"])
-    fig1.update_layout(yaxis=dict(autorange="reversed"), margin=dict(t=10),
-                        xaxis_title="Net EU Contribution (EUR)", yaxis_title="")
-    col1.plotly_chart(fig1, use_container_width=True)
+    pil = df_pillar.sort_values(val_col)
+    fig = px.bar(pil, x=val_col, y=pil_col, orientation="h", color_discrete_sequence=["#1F3864"])
+    fig.update_layout(margin=dict(t=10), xaxis_title="Net EU Contribution (EUR)", yaxis_title="")
+    fig.update_yaxes(automargin=True)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Pillar names mix vocabulary from different framework programmes "
+               "(e.g. FP7's 'SP1-Cooperation' vs Horizon Europe's 'Global Challenges'); "
+               "shown as-is rather than merged, since they are not confirmed equivalents.")
 
-    th = df_thematic.copy()
-    th.columns = ["Thematic Priority", "Participation", "Net EU Contribution (EUR)", "Participant Cost (EUR)"]
-    th = th[th["Participation"] > 0]
-    th["Avg award (EUR)"] = th["Net EU Contribution (EUR)"] / th["Participation"]
-    top_avg = th.nlargest(8, "Avg award (EUR)")
-    fig2 = px.bar(top_avg, x="Avg award (EUR)", y="Thematic Priority", orientation="h",
-                  color_discrete_sequence=["#C00000"])
-    fig2.update_layout(yaxis=dict(autorange="reversed"), margin=dict(t=10), yaxis_title="")
-    col2.plotly_chart(fig2, use_container_width=True)
-    st.caption("Left: total funding by pillar. Right: which thematic priorities carry "
-               "the biggest average grant per project (funding concentration, not just volume).")
-
-# ---------- Department / Faculty cleanup ----------
-st.header("5. Funding by faculty (cleaned)")
+# ---- Departments, cleaned ----
 if df_dept is not None:
+    st.subheader("Funding by faculty (cleaned)")
     name_col = get_col(df_dept, "Department Name")
     val_col = get_col(df_dept, "Pro rata Department EU Contribution (EUR)")
     d = df_dept[[name_col, val_col]].dropna()
     d = d[d[name_col].str.lower() != "totals"]
 
     CANONICAL = [
-        (r"international institute of social studies|\biss\b", "International Institute of Social Studies (ISS)"),
-        (r"health policy|ibmg|eshpm|health economics|health technology assessment|medical technology assessment|hta", "Erasmus School of Health Policy & Management (ESHPM)"),
-        (r"social and behav|faculty of social sciences|public administration|sociology|psychology, education", "Erasmus School of Social and Behavioural Sciences (ESSB)"),
-        (r"rotterdam school of management|\brsm\b", "Rotterdam School of Management (RSM)"),
-        (r"school of economics|econometric|business economics", "Erasmus School of Economics (ESE)"),
-        (r"school of law|criminology", "Erasmus School of Law (ESL)"),
-        (r"history, culture and communication|media and communication|arts and culture", "Erasmus School of History, Culture and Communication (ESHCC)"),
-        (r"philosophy", "Erasmus School of Philosophy (ESPhil)"),
+        (r"international institute (of|for) social studies|\biss\b|institute (of|for) social studies",
+         "International Institute of Social Studies (ISS)"),
+        (r"health polic|ibmg|eshpm|health econom|health technology assessment|medical technology assessment|\bhta\b",
+         "Erasmus School of Health Policy & Management (ESHPM)"),
+        (r"social and behav|faculty of social sciences|public admin|sociology|psychology,? education|essb",
+         "Erasmus School of Social and Behavioural Sciences (ESSB)"),
+        (r"rotterdam school of manage|\brsm\b|faculty of management", "Rotterdam School of Management (RSM)"),
+        (r"school of economics|econometric|business economics|\bese\b", "Erasmus School of Economics (ESE)"),
+        (r"school of law|criminolog|\besl\b", "Erasmus School of Law (ESL)"),
+        (r"history,?\s*(culture|art)|eshcc|arts? and culture|media and communication",
+         "Erasmus School of History, Culture and Communication (ESHCC)"),
+        (r"philosoph|esphil", "Erasmus School of Philosophy (ESPhil)"),
         (r"drift|transitions", "DRIFT"),
-        (r"data analytics|research services|university library", "Central research support"),
+        (r"data analytics|research services|university library|executive board|\bcvb\b",
+         "Central research support / governance"),
     ]
 
     def canon(name):
@@ -185,52 +233,103 @@ if df_dept is not None:
         for pat, label in CANONICAL:
             if re.search(pat, n):
                 return label
-        return "Other / central units"
+        return "Unmatched (see audit below)"
 
     d["Faculty"] = d[name_col].apply(canon)
-    agg = d.groupby("Faculty", as_index=False)[val_col].sum().sort_values(val_col, ascending=False)
+    matched = d[d["Faculty"] != "Unmatched (see audit below)"]
+    unmatched = d[d["Faculty"] == "Unmatched (see audit below)"]
+
+    agg = matched.groupby("Faculty", as_index=False)[val_col].sum().sort_values(val_col)
     fig = px.bar(agg, x=val_col, y="Faculty", orientation="h", color_discrete_sequence=["#1F3864"])
-    fig.update_layout(yaxis=dict(autorange="reversed"), margin=dict(t=10),
-                       xaxis_title="Pro-rata EU Contribution (EUR)", yaxis_title="")
+    fig.update_layout(margin=dict(t=10), xaxis_title="Pro-rata EU Contribution (EUR)", yaxis_title="")
+    fig.update_yaxes(automargin=True)
     st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"Consolidated {d[name_col].nunique()} raw department-name variants into "
-               f"{agg.shape[0]} recognisable faculties.")
+    st.caption(f"Consolidated {matched[name_col].nunique()} raw name variants into {agg.shape[0]} faculties. "
+               f"€{unmatched[val_col].sum():,.0f} across {unmatched.shape[0]} rows could not be confidently "
+               f"matched and is excluded from this chart (see audit).")
+    if not unmatched.empty:
+        with st.expander("Audit: unmatched department names (not shown in chart above)"):
+            st.dataframe(unmatched.sort_values(val_col, ascending=False), use_container_width=True)
 
-# ---------- Top collaboration partners ----------
-st.header("6. Closest research partners across Europe")
-if df_collab is not None:
-    org_col, link_col = df_collab.columns[0], df_collab.columns[1]
-    top_collab = df_collab.nlargest(15, link_col).sort_values(link_col)
-    fig = px.bar(top_collab, x=link_col, y=org_col, orientation="h",
-                 color_discrete_sequence=["#2E75B6"])
-    fig.update_layout(margin=dict(t=10), xaxis_title="Shared project links", yaxis_title="")
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"Out of {df_collab.shape[0]} distinct partner organisations across all projects.")
-
-# ---------- Research identity via keywords ----------
-st.header("7. Research identity — recurring topics")
+# ---- Keywords ----
 if df_keywords is not None:
+    st.subheader("Project keywords")
     kw_col, n_col = df_keywords.columns[0], df_keywords.columns[1]
     top_kw = df_keywords.nlargest(15, n_col).sort_values(n_col)
-    fig = px.bar(top_kw, x=n_col, y=kw_col, orientation="h",
-                 color_discrete_sequence=["#548235"])
+    fig = px.bar(top_kw, x=n_col, y=kw_col, orientation="h", color_discrete_sequence=["#548235"])
     fig.update_layout(margin=dict(t=10), xaxis_title="Number of projects tagged", yaxis_title="")
+    fig.update_yaxes(automargin=True)
     st.plotly_chart(fig, use_container_width=True)
 
-# ---------- Project status & MSCA/EIC context ----------
-st.header("8. Portfolio status")
-colA, colB, colC = st.columns(3)
-if df_status is not None:
-    st_col, cnt_col = df_status.columns[0], df_status.columns[1]
-    fig = px.pie(df_status, names=st_col, values=cnt_col, hole=0.55,
-                 color_discrete_sequence=["#C00000", "#2E75B6"])
-    fig.update_layout(margin=dict(t=10, b=10), showlegend=True)
-    colA.plotly_chart(fig, use_container_width=True)
-if df_msca is not None:
-    colB.metric("MSCA Participation", int(df_msca.iloc[0, 0]))
-if df_eic is not None:
-    colC.metric("EIC Participation", int(df_eic.iloc[0, 0]))
+# ---- Collaborations ----
+if df_collab is not None:
+    st.subheader("Top collaboration partners")
+    org_col, link_col = df_collab.columns[0], df_collab.columns[1]
+    top_collab = df_collab.nlargest(15, link_col).sort_values(link_col)
+    fig = px.bar(top_collab, x=link_col, y=org_col, orientation="h", color_discrete_sequence=["#2E75B6"])
+    fig.update_layout(margin=dict(t=10), xaxis_title="Shared project links", yaxis_title="")
+    fig.update_yaxes(automargin=True)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption(f"Top 15 of {df_collab.shape[0]} distinct partner organisations.")
+
+# ---- Collaboration map (official EU embed) ----
+st.subheader("Collaboration map")
+components.html("""
+<div style="width:100%;height:520px;">
+<iframe src="https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/single/?appid=dc5f6f40-c9de-4c40-8648-015d6ff21342&obj=EVcQAd&theme=card&opt=ctxmenu,currsel&select=$::Signature%20Year,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026&select=$::Organisation%20Name,ERASMUS%20UNIVERSITEIT%20ROTTERDAM"
+style="border:none;width:100%;height:100%;"></iframe></div>
+""", height=530)
+
+# ---- Key figures vs national benchmark ----
+if df_keyfig is not None:
+    st.subheader("Key figures — EUR vs national totals, by Framework Programme")
+    rows = []
+    for _, r in df_keyfig.iterrows():
+        indicator = r["Indicator"]
+        is_eur_amt = "(EUR)" in indicator
+        entry = {"Indicator": indicator}
+        for prog in ["HE", "H2020", "FP7"]:
+            org = eu_num(r.get(f"Organisation in {prog}"))
+            pct = r.get(f"% in {prog}")
+            if org is None:
+                entry[prog] = "—"
+            else:
+                amt = f"€{org:,.0f}" if is_eur_amt else f"{org:,.0f}"
+                entry[prog] = f"{amt} ({pct} of NL total)" if isinstance(pct, str) and pct != "-" else amt
+        rows.append(entry)
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+# ---- Not reproducible from this export ----
+with st.expander("Not included — needs data this export doesn't contain"):
+    st.markdown("""
+- **Project-level list** (acronym, thematic priority, signature date, CORDIS link per project) — the PDF's page-2 table needs one row per project; this export only has pre-aggregated summaries.
+- **Contribution vs. Total Cost scatter** — needs per-project cost and funding figures, not available at this aggregation level.
+
+Both would require exporting a project-level table from the Funding & Tenders Portal in addition to this dashboard export.
+""")
 
 st.divider()
-st.caption("Built for slide export — right-click any chart to save as an image, "
-           "or use Streamlit's camera icon in the top-right of each chart.")
+st.header("B — Two things not in the source dashboard")
+st.caption("Genuinely new, derived from the raw figures — not just a reformat of an existing PDF panel.")
+
+# ---- Average award size (efficiency) ----
+if df_thematic is not None:
+    st.subheader("Average award size by thematic priority")
+    th = df_thematic.copy()
+    th.columns = ["Thematic Priority", "Participation", "Net EU Contribution (EUR)", "Participant Cost (EUR)"]
+    th = th[th["Participation"] >= 3]  # drop low-n rows so one grant doesn't skew the "average"
+    th["Avg award (EUR)"] = th["Net EU Contribution (EUR)"] / th["Participation"]
+    top_avg = th.nlargest(8, "Avg award (EUR)").sort_values("Avg award (EUR)")
+    top_avg["label"] = top_avg["Thematic Priority"] + " (n=" + top_avg["Participation"].astype(int).astype(str) + ")"
+    fig = px.bar(top_avg, x="Avg award (EUR)", y="label", orientation="h", color_discrete_sequence=["#C00000"])
+    fig.update_layout(margin=dict(t=10), yaxis_title="", xaxis_title="Average EU contribution per project (EUR)")
+    fig.update_yaxes(automargin=True)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Contribution ÷ participation, restricted to priorities with at least 3 projects "
+               "so single large grants don't distort the average. This ratio isn't shown anywhere in the source dashboard.")
+
+st.caption("The cleaned faculty rollup in Section A is the other genuinely new piece of analysis — "
+           "the raw dashboard only ever shows the 122 uncleaned department-name rows.")
+
+st.divider()
+st.caption("Right-click any chart to save as an image for slides.")
