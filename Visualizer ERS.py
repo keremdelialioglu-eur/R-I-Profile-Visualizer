@@ -5,7 +5,6 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="EU Research Funding Dashboard", layout="wide")
 
@@ -24,12 +23,13 @@ h1, h2, h3 {color: #1F3864;}
 
 def stat_card(col, label, value, sub=None):
     """Custom card, not st.metric — st.metric clips long values/labels with an
-    ellipsis and doesn't wrap, which is exactly the bug we're avoiding here."""
-    col.markdown(f"""<div class="stat-card">
-        <div class="stat-label">{label}</div>
-        <div class="stat-value">{value}</div>
-        {f'<div class="stat-sub">{sub}</div>' if sub else ''}
-    </div>""", unsafe_allow_html=True)
+    ellipsis and doesn't wrap, which is exactly the bug we're avoiding here.
+    Built as a single-line string on purpose: multi-line indented HTML passed
+    to st.markdown(unsafe_allow_html=True) can get its closing tags treated as
+    literal text instead of markup (that's what caused the stray "</div>" text)."""
+    sub_html = f'<div class="stat-sub">{sub}</div>' if sub else ""
+    html = f'<div class="stat-card"><div class="stat-label">{label}</div><div class="stat-value">{value}</div>{sub_html}</div>'
+    col.markdown(html, unsafe_allow_html=True)
 
 
 st.title("🎓 EU Research Funding — Pitch Dashboard")
@@ -239,14 +239,13 @@ if df_collab is not None:
     st.caption(f"Top 15 of {df_collab.shape[0]} distinct partner organisations.")
 
 st.subheader("Collaboration map")
-components.html("""
-<div style="width:100%;height:520px;">
-<iframe src="https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/single/?appid=dc5f6f40-c9de-4c40-8648-015d6ff21342&obj=EVcQAd&theme=card&opt=ctxmenu,currsel&select=$::Signature%20Year,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026&select=$::Organisation%20Name,ERASMUS%20UNIVERSITEIT%20ROTTERDAM"
-style="border:none;width:100%;height:100%;"></iframe></div>
-""", height=530)
-st.caption("If this shows blank instead of a map, the EC's dashboard is likely blocking embeds from this domain "
-           "(a server-side X-Frame-Options/CSP restriction, not something fixable from this app). "
-           "Fallback link: https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/sense/app/dc5f6f40-c9de-4c40-8648-015d6ff21342")
+st.info(
+    "The EC's embeddable dashboard doesn't work reliably outside their own site — it returns a "
+    "'Qlik Sense engine' connection error when loaded from a third-party page, most likely because "
+    "the embed is scoped to an approved europa.eu session/referrer rather than open embedding. "
+    "Open it directly for the map instead: "
+    "[R&I Profiles collaboration dashboard](https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/sense/app/dc5f6f40-c9de-4c40-8648-015d6ff21342)"
+)
 
 if df_keyfig is not None:
     st.subheader("Key figures — EUR vs national totals, by Framework Programme")
