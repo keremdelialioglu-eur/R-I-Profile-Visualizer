@@ -53,7 +53,7 @@ raw = pd.read_excel(uploaded, sheet_name=None, engine="openpyxl")
 
 def find(cols_required):
     for df in raw.values():
-        if all(any(c.lower() == col.lower() for col in df.columns) for c in cols_required):
+        if all(any(c.lower() == col.lower() for c in df.columns) for col in cols_required):
             return df.copy()
     return None
 
@@ -276,8 +276,8 @@ if df_collab is not None:
 st.subheader("Collaboration map")
 components.html("""
 <div style="width:100%;height:520px;">
-<iframe src="https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/single/?appid=dc5f6f40-c9de-4c40-8648-015d6ff21342&obj=EVcQAd&theme=card&opt=ctxmenu,currsel&select=$::Signature%20Year,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026&select=$::Organisation%20Name,ERASMUS%20UNIVERSITEIT%20ROTTERDAM"
-style="border:none;width:100%;height:100%;"></iframe></div>
+<iframe src="https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/single/?appid=dc5f6f40-c9de-4c40-8648-015d6ff21342&obj=EVcQAd&theme=card&opt=ctxmenu,currsel&select=$::Organisation%20Name,ERASMUS%20UNIVERSITEIT%20ROTTERDAM" style="border:none;width:100%;height:100%;"></iframe>
+</div>
 """, height=530)
 
 # ---- Key figures vs national benchmark ----
