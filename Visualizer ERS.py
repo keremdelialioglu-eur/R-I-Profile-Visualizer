@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="EU Research Funding Dashboard", layout="wide")
 
@@ -12,14 +13,23 @@ st.markdown("""
 <style>
 .main > div {max-width: 1150px; margin: 0 auto;}
 h1, h2, h3 {color: #1F3864;}
+.stat-card {background:#f5f7fa; border-radius:10px; padding:14px 10px; text-align:center; height:100%;}
+.stat-label {font-size:0.78rem; color:#555; margin-bottom:4px;}
+.stat-value {font-size:1.55rem; font-weight:700; color:#1F3864; line-height:1.25; word-wrap:break-word; white-space:normal;}
+.stat-sub {font-size:0.72rem; color:#888; margin-top:2px;}
 .stPlotlyChart, .js-plotly-plot, .plotly {width: 100% !important;}
 </style>
 """, unsafe_allow_html=True)
 
 
 def stat_card(col, label, value, sub=None):
-    """Use Streamlit's native metric instead of raw HTML divs."""
-    col.metric(label, value, delta=sub)
+    """Custom card, not st.metric — st.metric clips long values/labels with an
+    ellipsis and doesn't wrap, which is exactly the bug we're avoiding here."""
+    col.markdown(f"""<div class="stat-card">
+        <div class="stat-label">{label}</div>
+        <div class="stat-value">{value}</div>
+        {f'<div class="stat-sub">{sub}</div>' if sub else ''}
+    </div>""", unsafe_allow_html=True)
 
 
 st.title("🎓 EU Research Funding — Pitch Dashboard")
@@ -103,7 +113,10 @@ if df_msca is not None:
     stat_card(row2[1], "MSCA Participation", int(df_msca.iloc[0, 0]))
 if df_eic is not None:
     eic_val = int(df_eic.iloc[0, 0])
-    stat_card(row2[2], "EIC Participation", eic_val if eic_val > 0 else "None")
+    if eic_val > 0:
+        stat_card(row2[2], "EIC Participation", eic_val)
+    else:
+        row2[2].caption("No EIC-funded projects yet.")
 
 st.divider()
 st.header("A — Recreating the organisation dashboard")
@@ -225,8 +238,15 @@ if df_collab is not None:
     st.plotly_chart(fig, use_container_width=True)
     st.caption(f"Top 15 of {df_collab.shape[0]} distinct partner organisations.")
 
-# The external Qlik collaboration map was intentionally removed.
-# This dashboard is now self-contained and cannot fail because of the Qlik engine.
+st.subheader("Collaboration map")
+components.html("""
+<div style="width:100%;height:520px;">
+<iframe src="https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/single/?appid=dc5f6f40-c9de-4c40-8648-015d6ff21342&obj=EVcQAd&theme=card&opt=ctxmenu,currsel&select=$::Signature%20Year,2007,2008,2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026&select=$::Organisation%20Name,ERASMUS%20UNIVERSITEIT%20ROTTERDAM"
+style="border:none;width:100%;height:100%;"></iframe></div>
+""", height=530)
+st.caption("If this shows blank instead of a map, the EC's dashboard is likely blocking embeds from this domain "
+           "(a server-side X-Frame-Options/CSP restriction, not something fixable from this app). "
+           "Fallback link: https://dashboard.tech.ec.europa.eu/qs_digit_dashboard_mt/public/sense/app/dc5f6f40-c9de-4c40-8648-015d6ff21342")
 
 if df_keyfig is not None:
     st.subheader("Key figures — EUR vs national totals, by Framework Programme")
