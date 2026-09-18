@@ -275,7 +275,6 @@ TOC = [
     ("Full partner network", "full-partners"),
     ("Collaboration map", "collab-map"),
     ("Key figures vs national totals", "key-figures"),
-    ("C — Funding vs. participation efficiency", "section-c"),
     ("B — Average award size", "section-b"),
 ]
 with st.sidebar:
@@ -294,11 +293,6 @@ with st.sidebar:
         year_range = st.slider("Year range", ymin, ymax, (ymin, ymax))
     else:
         year_range = None
-    st.caption("These two filters only apply to the **Evolution/Year-over-year** and **Framework Programme** "
-               "sections, plus the columns shown in the **Key figures** table. Everything else in this file "
-               "(faculty, pillar, thematic priority, keywords, partners) is exported as a single all-time total "
-               "with no year or programme breakdown, so it can't be filtered without inventing numbers — it stays "
-               "fixed regardless of the filters above.")
     st.divider()
     st.caption("Tip: click-drag on any chart to zoom into a region, double-click to reset. "
                "Hover over the top-right of a chart for a toolbar with a camera icon — "
@@ -591,39 +585,6 @@ if df_keyfig is not None:
         st.plotly_chart(fig, use_container_width=True)
         st.caption("EUR's share of the Dutch national total, across successive framework programmes — a real "
                    "upward trend, not present as a chart in the source dashboard.")
-
-with st.expander("Not included — needs data this export doesn't contain"):
-    st.markdown("""
-- **Project-level list** — this export contains pre-aggregated summaries rather than one row per project.
-- **True per-project cost-vs-contribution scatter** — needs per-project figures. Section C below gives the closest
-  honest substitute available in this export: the same three metrics (participation, EU contribution, cost),
-  aggregated at thematic-priority level instead of per project.
-""")
-
-# ================= SECTION C: efficiency view =================
-st.divider()
-st.header("C — Funding vs. participation efficiency", anchor="section-c")
-if not thematic_avg.empty:
-    fig = px.scatter(th, x="Participation", y="Net EU Contribution (EUR)", size="Participant Cost (EUR)",
-                      color="Thematic Priority", hover_name="Thematic Priority",
-                      size_max=45)
-    fig.update_layout(margin=dict(t=10), showlegend=False,
-                       xaxis_title="Number of participations", yaxis_title="Net EU Contribution (EUR)")
-    st.plotly_chart(fig, use_container_width=True)
-    st.caption("Each bubble is one thematic priority (hover for its name) — x = how many projects, y = total EU "
-               "contribution, bubble size = total participant cost. Upper-left bubbles get a lot of funding from "
-               "few projects (high per-project value); lower-right bubbles spread funding across many projects. "
-               "This is the closest honest equivalent to the PDF's missing cost-vs-contribution scatter, at "
-               "thematic-priority granularity rather than per-project.")
-    st.warning(
-        "A faculty-level version of this view isn't possible from this export: the department sheet only has a "
-        "pro-rata EU contribution per department — it has no participation count and no participant cost per "
-        "department. Building those numbers would mean guessing/estimating them, which isn't something this app "
-        "does. If a future export adds participation and cost broken down by department, this chart is a direct "
-        "drop-in."
-    )
-else:
-    st.info("Thematic priority data not found in this export — efficiency view unavailable.")
 
 # ================= SECTION B =================
 st.divider()
