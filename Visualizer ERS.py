@@ -33,9 +33,9 @@ def stat_card(col, label, value, sub=None):
     col.markdown(html, unsafe_allow_html=True)
 
 
-st.title("🎓 EU Research Funding — Pitch Dashboard")
+st.title("EU Research Funding Pitch Dashboard")
 st.caption("Upload the DataKey.xlsx export to generate slide-ready visuals. "
-           "Every chart is interactive — zoom, pan, toggle legend items, and export as PNG from its own toolbar "
+           "Every chart is interactive. Zoom, pan, toggle legend items, and export as PNG from its own toolbar "
            "(hover top-right corner of a chart to see it).")
 uploaded = st.file_uploader("Upload DataKey.xlsx", type=["xlsx"])
 if not uploaded:
@@ -295,8 +295,7 @@ with st.sidebar:
         year_range = None
     st.divider()
     st.caption("Tip: click-drag on any chart to zoom into a region, double-click to reset. "
-               "Hover over the top-right of a chart for a toolbar with a camera icon — "
-               "that downloads the chart as a PNG, ready to drop into a slide. "
+               "Hover over the top-right of a chart for a toolbar with a camera icon to download as PNG."
                "Click legend entries to show/hide a series.")
 
 # ================= HEADLINE KPIs =================
@@ -379,7 +378,7 @@ st.caption("Matches the panels in the reference PDF, using the current export.")
 
 if df_org is not None:
     st.markdown('<div id="org-details"></div>', unsafe_allow_html=True)
-    with st.expander("Organisation details (legal/registry info — not usually slide material, kept for completeness)"):
+    with st.expander("Organisation details"):
         vals = {c: parse_label_value(df_org[c].iloc[0]) for c in df_org.columns}
         cols = st.columns(4)
         for i, (label, value) in enumerate(vals.items()):
@@ -422,9 +421,7 @@ if df_years is not None:
     st.plotly_chart(fig, use_container_width=True)
     recent = df_years[df_years[year_col] >= 2022][part_col].sum()
     st.caption(f"{int(recent)} of {int(df_years[cum_col].iloc[-1])} total participations to date came from 2022 onward. "
-               "\"Cumulative participation\" is the running total of new participations added year by year since 2007 "
-               "(right-hand axis, values taken directly from the source, not recalculated). Programme start years "
-               "shown are the EU's official framework programme calendar (public knowledge, not from this file).")
+               "\"Cumulative participation\" is the running total of new participations added year by year since 2007.")
 
     st.subheader("Year-over-year growth", anchor="yoy")
     yoy_view = yoy_df[(yoy_df[year_col] >= year_range[0]) & (yoy_df[year_col] <= year_range[1])] if year_range else yoy_df
@@ -434,9 +431,7 @@ if df_years is not None:
                  color_discrete_map={True: "#2E7D32", False: "#C00000"})
     fig.update_layout(showlegend=False, margin=dict(t=10), yaxis_title="YoY change in new participations (%)")
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("Year-over-year % change in new participations (not cumulative) — a single low or high year can "
-               "swing this a lot, which is exactly why the 'recent growth rate' in the executive summary above "
-               "uses a 3-year average instead.")
+    st.caption("Year-over-year % change in new participations (not cumulative).")
 
 if df_fp is not None:
     st.subheader("Participation per Framework Programme", anchor="fp-programme")
@@ -461,7 +456,7 @@ if df_pillar is not None:
     fig.update_yaxes(automargin=True)
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Pillar names are shown as exported; categories from different framework programmes are not merged. "
-               "Not filterable by year/programme — this sheet only has an all-time total per pillar.")
+               "Not filterable by year/programme.")
 
 # ---- Departments (uses the classification computed once, above) ----
 if df_dept is not None:
@@ -473,17 +468,13 @@ if df_dept is not None:
     st.plotly_chart(fig, use_container_width=True)
 
     st.caption(f"Every one of the {d[name_col].nunique()} distinct raw department-name strings in this file was "
-               f"hand-matched, against EUR's official list of 8 faculties/schools (verified against eur.nl), to an "
-               f"exact lookup table — not a fuzzy match. €{central_total:,.0f} sits with central/university-wide "
+               f"hand-matched against EUR's official list of 8 faculties/schools (verified against eur.nl) to an "
+               f"exact lookup table. €{central_total:,.0f} sits with central/university-wide "
                f"units (not a faculty), and €{unknown_total:,.0f} across {unknown_rows.shape[0]} rows is genuinely "
-               f"unlabelled in the source data itself (e.g. literally listed as \"Missing\"). "
+               f"unlabelled in the source data itself (e.g. literally listed as \"Missing\").")
                "Not filterable by year/programme — this sheet only has an all-time total per department.")
     if (d[name_col].str.contains("drift", case=False, na=False)).any():
-        st.caption("Note: the R&I export shows no funding recorded for DRIFT (Dutch Research Institute For "
-                   "Transitions) — an explicit €0 in the source data, not a gap in this app's processing.")
     if not new_to_file.empty:
-        st.warning(f"{new_to_file.shape[0]} department name(s) in this file were not in the lookup table used to "
-                    "build this app — likely a different export. Listed below for manual classification:")
         st.dataframe(new_to_file[[name_col, val_col]], use_container_width=True)
 
 # ---- Keywords as a tag cloud, not a bar chart ----
@@ -505,7 +496,7 @@ if df_keywords is not None:
     )
     st.markdown(f'<div class="tagcloud">{spans}</div>', unsafe_allow_html=True)
     st.caption(f"Top {top.shape[0]} of {df_keywords.shape[0]} keywords, sized by number of tagged projects "
-               "(hover for exact count). Not filterable by year/programme.")
+               "(hover for exact count).")
 
 # ---- Collaborations: leaderboard + full picture + full table ----
 if df_collab is not None:
@@ -517,7 +508,7 @@ if df_collab is not None:
     fig.update_layout(margin=dict(t=10), xaxis_title="Shared project links", yaxis_title="")
     fig.update_yaxes(automargin=True)
     st.plotly_chart(fig, use_container_width=True)
-    st.caption(f"Top 15 of {df_collab.shape[0]} distinct partner organisations. Not filterable by year/programme.")
+    st.caption(f"Top 15 of {df_collab.shape[0]} distinct partner organisations.")
 
     st.subheader("Full partner network", anchor="full-partners")
     fig2 = px.treemap(df_collab, path=[org_col], values=link_col, color=link_col,
@@ -542,7 +533,7 @@ st.markdown(
 st.caption("Opens in the EU's own dashboard (it can't be reliably embedded here).")
 
 if df_keyfig is not None:
-    st.subheader("Key figures — EUR vs national totals, by Framework Programme", anchor="key-figures")
+    st.subheader("Key figures: EUR vs national totals, by Framework Programme", anchor="key-figures")
     progs_to_show = [p for p in ["HE", "H2020", "FP7"] if p in selected_fp] or ["HE", "H2020", "FP7"]
     all_indicators = df_keyfig["Indicator"].tolist()
     shown_indicators = st.multiselect("Rows to show", all_indicators, default=all_indicators, key="keyfig_rows")
@@ -566,8 +557,7 @@ if df_keyfig is not None:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
         st.caption("No rows selected.")
-    st.caption("Columns follow the Framework Programme filter in the sidebar; rows can be toggled above — e.g. "
-               "hide \"Net EU Contribution (EUR)\" if you'd rather not show its blank FP7 cell on a slide.")
+    st.caption("Columns follow the Framework Programme filter in the sidebar.")
 
     share_rows = []
     for _, r in df_keyfig.iterrows():
