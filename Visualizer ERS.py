@@ -263,7 +263,7 @@ if df_years is not None:
 TOC = [
     ("Headline numbers", "headline-numbers"),
     ("Executive summary", "exec-summary"),
-    ("A — Recreating the organisation dashboard", "section-a"),
+    ("Recreating the organisation dashboard", "section-a"),
     ("Organisation details", "org-details"),
     ("Evolution of participation", "evolution"),
     ("Year-over-year growth", "yoy"),
@@ -275,7 +275,7 @@ TOC = [
     ("Full partner network", "full-partners"),
     ("Collaboration map", "collab-map"),
     ("Key figures vs national totals", "key-figures"),
-    ("B — Average award size", "section-b"),
+    ("Average award size", "section-b"),
 ]
 with st.sidebar:
     st.header("Contents")
@@ -325,7 +325,7 @@ if row2_items:
 # ================= EXECUTIVE SUMMARY =================
 st.divider()
 st.header("Executive summary", anchor="exec-summary")
-st.caption("All-time snapshot — not affected by the sidebar filters (those apply to the detailed sections below).")
+st.caption("All-time snapshot")
 
 ex1, ex2, ex3 = st.columns(3)
 if df_contrib_total is not None:
@@ -363,7 +363,7 @@ if df_keyfig is not None:
 
 # ================= SECTION A =================
 st.divider()
-st.header("A — Recreating the organisation dashboard", anchor="section-a")
+st.header("Recreating the organisation dashboard", anchor="section-a")
 st.caption("Matches the panels in the reference PDF, using the current export.")
 
 if df_org is not None:
@@ -434,7 +434,7 @@ if df_fp is not None:
     fig.update_yaxes(automargin=True)
     st.plotly_chart(fig, use_container_width=True)
     st.caption("FP7 (2007–2013), H2020 (2014–2020) and Horizon Europe (2021–2027, still running) cover different "
-               "numbers of years, so these totals aren't a like-for-like comparison — roughly 8–9/year under FP7, "
+               "numbers of years, so these totals aren't a like-for-like comparison: roughly 8–9/year under FP7, "
                "~14/year under H2020, ~14/year so far under Horizon Europe (using public EU programme calendar years).")
 
 if df_pillar is not None:
@@ -563,12 +563,11 @@ if df_keyfig is not None:
                       color="Indicator", markers=True, color_discrete_sequence=["#1F3864", "#C00000"])
         fig.update_layout(margin=dict(t=10))
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("EUR's share of the Dutch national total, across successive framework programmes — a real "
-                   "upward trend, not present as a chart in the source dashboard.")
+        st.caption("EUR's share of the Dutch national total, across successive framework programmes")
 
 # ================= SECTION B =================
 st.divider()
-st.header("B — Average award size by thematic priority", anchor="section-b")
+st.header("Average award size by thematic priority", anchor="section-b")
 st.caption("Contribution ÷ participation — a ratio not shown anywhere in the source dashboard.")
 if not thematic_avg.empty:
     top_avg = thematic_avg.head(8).sort_values("Avg award (EUR)")
