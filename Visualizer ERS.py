@@ -327,7 +327,7 @@ st.divider()
 st.header("Executive summary", anchor="exec-summary")
 st.caption("All-time snapshot — not affected by the sidebar filters (those apply to the detailed sections below).")
 
-ex1, ex2, ex3, ex4 = st.columns(4)
+ex1, ex2, ex3 = st.columns(3)
 if df_contrib_total is not None:
     stat_card(ex1, "Total EU Contribution", f"€{df_contrib_total.iloc[0, 0] / 1e6:.1f}M")
 if df_fp is not None:
@@ -338,19 +338,16 @@ if df_fp is not None:
     if fp7:
         stat_card(ex2, "Participation growth since FP7", f"{fp7} → {list(fp_vals.values())[1]} → {he}",
                    "FP7 → H2020 → Horizon Europe (raw counts, unequal period lengths)")
-if not dept_agg.empty:
-    top_fac = dept_agg.iloc[0]
-    stat_card(ex3, "Largest faculty", top_fac["Group"].split(" (")[0], f"€{top_fac[val_col]:,.0f}")
 if not thematic_avg.empty:
     top_them = thematic_avg.iloc[0]
-    stat_card(ex4, "Largest thematic priority by avg. award", top_them["Thematic Priority"],
+    stat_card(ex3, "Largest thematic priority by avg. award", top_them["Thematic Priority"],
                f"€{top_them['Avg award (EUR)']:,.0f}/project (n={int(top_them['Participation'])})")
 
-ex5, ex6, ex7 = st.columns(3)
+ex4, ex5 = st.columns(2)
 if df_collab is not None:
     org_col, link_col = df_collab.columns[:2]
     top_partner = df_collab.sort_values(link_col, ascending=False).iloc[0]
-    stat_card(ex5, "Most important collaborator", top_partner[org_col], f"{int(top_partner[link_col])} shared project links")
+    stat_card(ex4, "Most important collaborator", top_partner[org_col], f"{int(top_partner[link_col])} shared project links")
 if df_keyfig is not None:
     part_row = df_keyfig[df_keyfig["Indicator"] == "Participation"]
     if not part_row.empty:
@@ -361,15 +358,8 @@ if df_keyfig is not None:
                 latest_pct = (prog, v)
                 break
         if latest_pct:
-            stat_card(ex6, "EUR's share of Dutch total (participation)", f"{latest_pct[1]}%".replace(".", ","),
+            stat_card(ex5, "EUR's share of Dutch total (participation)", f"{latest_pct[1]}%".replace(".", ","),
                        f"most recent programme: {latest_pct[0]}")
-if not yoy_df.empty and yoy_df.shape[0] >= 4:
-    recent3 = yoy_df[pc].iloc[-3:].mean()
-    prior3 = yoy_df[pc].iloc[-6:-3].mean() if yoy_df.shape[0] >= 6 else yoy_df[pc].iloc[:-3].mean()
-    if prior3:
-        growth = (recent3 - prior3) / prior3 * 100
-        stat_card(ex7, "Recent growth rate", f"{growth:+.0f}%",
-                   "avg. new participations/year, last 3 years vs the 3 before that")
 
 # ================= SECTION A =================
 st.divider()
@@ -472,8 +462,8 @@ if df_dept is not None:
                f"exact lookup table. €{central_total:,.0f} sits with central/university-wide "
                f"units (not a faculty), and €{unknown_total:,.0f} across {unknown_rows.shape[0]} rows is genuinely "
                f"unlabelled in the source data itself (e.g. literally listed as \"Missing\").")
-               "Not filterable by year/programme — this sheet only has an all-time total per department.")
     if (d[name_col].str.contains("drift", case=False, na=False)).any():
+        pass
     if not new_to_file.empty:
         st.dataframe(new_to_file[[name_col, val_col]], use_container_width=True)
 
