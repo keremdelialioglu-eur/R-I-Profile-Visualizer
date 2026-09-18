@@ -484,6 +484,9 @@ if df_dept is not None:
                f"units (not a faculty), and €{unknown_total:,.0f} across {unknown_rows.shape[0]} rows is genuinely "
                f"unlabelled in the source data itself (e.g. literally listed as \"Missing\"). "
                "Not filterable by year/programme — this sheet only has an all-time total per department.")
+    if (d[name_col].str.contains("drift", case=False, na=False)).any():
+        st.caption("Note: the R&I export shows no funding recorded for DRIFT (Dutch Research Institute For "
+                   "Transitions) — an explicit €0 in the source data, not a gap in this app's processing.")
     if not new_to_file.empty:
         st.warning(f"{new_to_file.shape[0]} department name(s) in this file were not in the lookup table used to "
                     "build this app — likely a different export. Listed below for manual classification:")
@@ -547,9 +550,13 @@ st.caption("Opens in the EU's own dashboard (it can't be reliably embedded here)
 if df_keyfig is not None:
     st.subheader("Key figures — EUR vs national totals, by Framework Programme", anchor="key-figures")
     progs_to_show = [p for p in ["HE", "H2020", "FP7"] if p in selected_fp] or ["HE", "H2020", "FP7"]
+    all_indicators = df_keyfig["Indicator"].tolist()
+    shown_indicators = st.multiselect("Rows to show", all_indicators, default=all_indicators, key="keyfig_rows")
     rows = []
     for _, r in df_keyfig.iterrows():
         indicator = r["Indicator"]
+        if indicator not in shown_indicators:
+            continue
         is_eur_amt = "(EUR)" in indicator
         entry = {"Indicator": indicator}
         for prog in progs_to_show:
@@ -561,8 +568,12 @@ if df_keyfig is not None:
                 amount = f"€{org:,.0f}" if is_eur_amt else f"{org:,.0f}"
                 entry[prog] = f"{amount} ({pct} of NL total)" if isinstance(pct, str) and pct != "-" else amount
         rows.append(entry)
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    st.caption("Columns shown here follow the Framework Programme filter in the sidebar.")
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    else:
+        st.caption("No rows selected.")
+    st.caption("Columns follow the Framework Programme filter in the sidebar; rows can be toggled above — e.g. "
+               "hide \"Net EU Contribution (EUR)\" if you'd rather not show its blank FP7 cell on a slide.")
 
     share_rows = []
     for _, r in df_keyfig.iterrows():
